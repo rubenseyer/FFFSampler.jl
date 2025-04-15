@@ -1,0 +1,27 @@
+name = "FFFSampler"
+uuid = "0eb0cbc5-7281-4550-a200-cbef77f2952d"
+authors = ["Erik Jansson", "Moritz Schauer", "Ruben Seyer <rubense@chalmers.se>", "Akash Sharma"]
+version = "0.1.0"
+
+[deps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[weakdeps]
+Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
+
+[extensions]
+FFFSamplerTuringExt = ["Turing"]
+
+[extras]
+Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
+
+[compat]
+AbstractMCMC = "5.6.0"
+LogDensityProblems = "2.1.2"
+PDMats = "0.11.32"
+Turing = "0.36.2"
