@@ -1,4 +1,4 @@
-[![arXiv](https://img.shields.io/badge/article-arXiv%3A2504.XXXX-B31B1B)](https://arxiv.org/abs/2504.XXXX)
+[![arXiv](https://img.shields.io/badge/article-arXiv%3A2504.12190-B31B1B)](https://arxiv.org/abs/2504.12190)
 
 # Creating non-reversible rejection-free samplers by rebalancing skew-balanced Markov jump processes
 
@@ -11,7 +11,7 @@ Under `experiments/` we provide the code used to produce the results in our pape
     title={Creating Non-Reversible Rejection-Free Samplers by Rebalancing Skew-Balanced Markov Jump Processes},
     author={Erik Jansson and Moritz Schauer and Ruben Seyer and Akash Sharma},
     year={2025},
-    eprint={2504.XXXX},
+    eprint={2504.12190},
     archivePrefix={arXiv}
 }
 ```
