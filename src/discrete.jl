@@ -1,10 +1,8 @@
-struct DiscreteFFF{T}  <: AbstractMCMC.AbstractSampler
-    inner_sampler::FFF{T}
+struct DiscreteFFF{F<:FFF, T}  <: AbstractMCMC.AbstractSampler
+    inner_sampler::F
     "discretization step size"
     Δ::T
 end
-DiscreteFFF(args...; Δ=1.0) = DiscreteFFF(FFF(args...), Δ)
-DiscreteFFF(sampler::FFF) = DiscreteFFF(sampler, 1.0)
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
@@ -13,26 +11,29 @@ function AbstractMCMC.step(
     initial_params=nothing,
     kwargs...
 )
-    return AbstractMCMC.step(rng, model_wrapper, sampler.inner_sampler; initial_params)
+    sample, _ = AbstractMCMC.step(rng, model_wrapper, sampler.inner_sampler; initial_params)
+    τ = 1.0/sum(sample.Λ)
+    return sample, (τ, sample)
 end
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     model_wrapper::AbstractMCMC.LogDensityModel,
     sampler::DiscreteFFF,
-    state::FFFSampler.FFFTransition;
+    state::Tuple{Float64,<:AbstractFFFTransition};
     kwargs...
 )
-    t = Random.randexp(rng)/sum(state.Λ)
-    while t < sampler.Δ
-        state, _ = AbstractMCMC.step(rng, model_wrapper, sampler.inner_sampler, state)
-        t += Random.randexp(rng)/sum(state.Λ)
+    τ, sample = state
+    τ -= sampler.Δ
+    while τ < 0
+        sample, _ = AbstractMCMC.step(rng, model_wrapper, sampler.inner_sampler, sample)
+        τ += 1.0/sum(sample.Λ)
     end
     
-    return state, state
+    return sample, (τ, sample)
 end
 
-function discretize(samples::AbstractVector{<:FFFSampler.AbstractFFFTransition{T1}}, N) where {T1}
+function discretize(samples::AbstractVector{<:AbstractFFFTransition{T1}}, N) where {T1}
     ts = cumsum(1.0/sum(t.Λ) for t in samples)
     Δ = ts[end]/N
     xs = Vector{T1}(undef, N)
