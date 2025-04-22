@@ -19,8 +19,7 @@ using Turing
 end
 model = banana(1., 1/10, 100/10)
 ```
-<img src="https://github.com/user-attachments/assets/627cfe12-f537-4d8e-8280-431951b797b5" width="400" >
-
+<img src="https://github.com/user-attachments/assets/20111807-96f3-4ec0-a093-0a37612750ff" width="400">
 
 
 Then it's just plug and play:
@@ -33,10 +32,7 @@ fff = FFF(ϵ, L, λ)
 chain_fff = @time sample(model, externalsampler(DiscreteFFF(fff,0.1)), 200_000)
 chain_nuts = @time sample(model, NUTS(), 200_000)
 ```
-
-<img src="https://github.com/user-attachments/assets/35065be6-2892-4664-8aa5-ea49de1d2907" width="400" >
-
-
+<img src="https://github.com/user-attachments/assets/b894085c-faef-4803-828c-58a6462fa742" width="400">
 
 So what does FFF do? 
 
