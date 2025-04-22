@@ -1,7 +1,7 @@
 name = "FFFSampler"
 uuid = "0eb0cbc5-7281-4550-a200-cbef77f2952d"
 authors = ["Erik Jansson", "Moritz Schauer", "Ruben Seyer <rubense@chalmers.se>", "Akash Sharma"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"

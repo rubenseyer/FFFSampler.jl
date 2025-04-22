@@ -5,6 +5,54 @@
 This package implements the FFF sampler for use in the Julia ecosystem.
 Under `experiments/` we provide the code used to produce the results in our paper.
 
+## Demo
+
+
+Let's take the evil banana target as a Turing.jl model.
+```julia
+using Turing
+
+@model function banana(μ, a, b)
+    X ~ Normal(μ, 1/√(2a))
+    Y ~ Normal(X^2, 1/√(2b))
+    return (X, Y)
+end
+model = banana(1., 1/10, 100/10)
+```
+<img src="https://github.com/user-attachments/assets/627cfe12-f537-4d8e-8280-431951b797b5" width="400" >
+
+
+
+Then it's just plug and play:
+```julia 
+using FFFSampler
+
+ϵ, L, λ  = 0.035, 20, 0.04 # from paper
+fff = FFF(ϵ, L, λ)
+
+chain_fff = @time sample(model, externalsampler(DiscreteFFF(fff,0.1)), 200_000)
+chain_nuts = @time sample(model, NUTS(), 200_000)
+```
+
+<img src="https://github.com/user-attachments/assets/35065be6-2892-4664-8aa5-ea49de1d2907" width="400" >
+
+
+
+So what does FFF do? 
+
+* It moves along level curves of the Hamiltonians like HMC, but it visits more than one point on each Hamiltonian, keeping going in the same direction
+* Internally it uses a continuous notion of time and spends a random time in each point, removing the need for rejections (here we call a wrapper `DiscreteFFF` to hide this from Turing; see https://github.com/TuringLang/MCMCChains.jl/issues/253)
+
+Try it, we are curious about your experience!
+
+Directly accessing weighted trajectories is also easy with some glue code to reinterpret the model:
+```julia
+# bypass MCMCChains
+using LogDensityProblemsAD, LogDensityProblems, ForwardDiff
+problem = LogDensityProblemsAD.ADgradient(Val(:ForwardDiff), DynamicPPL.LogDensityFunction(model));
+trace_fff = AbstractMCMC.sample(problem, fff, 200_000)
+```
+
 ## Citation
 ```
 @misc{jansson_creating_2025,
