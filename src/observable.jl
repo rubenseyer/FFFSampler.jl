@@ -43,3 +43,11 @@ function trajectory(samples::AbstractVector{<:AbstractFFFTransition})
     end
     ts, xs
 end
+
+function acceptance_rate(samples::AbstractVector{<:AbstractFFFTransition})
+    return Statistics.mean(t.action == FORWARD for t in Iterators.drop(samples,1))
+end
+
+function flip_rate(samples::AbstractVector{<:AbstractFFFTransition})
+    return Statistics.mean(t.action == FLIP for t in Iterators.drop(samples,1))
+end

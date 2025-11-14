@@ -1,13 +1,14 @@
-struct DiscreteFFF{F<:FFF, T}  <: AbstractMCMC.AbstractSampler
-    inner_sampler::F
+struct Discretizer{S, T}  <: AbstractMCMC.AbstractSampler
+    inner_sampler::S
     "discretization step size"
     Δ::T
 end
+const DiscreteFFF = Discretizer
 
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     model_wrapper::AbstractMCMC.LogDensityModel,
-    sampler::DiscreteFFF;
+    sampler::Discretizer;
     initial_params=nothing,
     kwargs...
 )
@@ -19,8 +20,8 @@ end
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     model_wrapper::AbstractMCMC.LogDensityModel,
-    sampler::DiscreteFFF,
-    state::Tuple{Float64,<:AbstractFFFTransition};
+    sampler::Discretizer,
+    state;
     kwargs...
 )
     τ, sample = state
@@ -33,11 +34,12 @@ function AbstractMCMC.step(
     return sample, (τ, sample)
 end
 
-function discretize(samples::AbstractVector{<:AbstractFFFTransition{T1}}, N) where {T1}
-    ts = cumsum(1.0/sum(t.Λ) for t in samples)
+discretize(samples, N) = _discretize(trajectory(samples)..., N)
+discretize(xs, ws, N) = _discretize(cumsum(ws), xs, N)
+function _discretize(ts, zs::AbstractVector{T}, N) where {T}
     Δ = ts[end]/N
-    xs = Vector{T1}(undef, N)
-    xs[1] = samples[1].current.q
+    xs = Vector{T}(undef, N)
+    xs[1] = zs[1]
     t = 0.0
     j = 1
     for i in 2:N
@@ -45,7 +47,24 @@ function discretize(samples::AbstractVector{<:AbstractFFFTransition{T1}}, N) whe
         while t > ts[j]
             j += 1
         end
-        xs[i] = samples[j].current.q
+        xs[i] = zs[j]
     end
     return xs
+end
+
+# Here we expand to a discrete sample with the same information (stochastically).
+# In principle this means adding virtual rejections to the trajectory.
+# This works well if we have bounded rates, since that upper bounds the expanded sample size.
+# However, with unbounded rates the sample size can increase uncontrollably.
+expand(samples; rng=Random.default_rng()) = expand(trajectory(samples)...; rng)
+function expand(xs, ws; rng=Random.default_rng())
+    ys = empty(xs)
+    min_weight = minimum(ws)
+    for (x,w) in zip(xs, ws)
+        push!(ys, x)
+        while rand(rng) > min_weight/w  # Geometric(p)
+            push!(ys, x)
+        end
+    end
+    return ys
 end

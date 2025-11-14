@@ -1,9 +1,4 @@
-abstract type BalancingFunction end
-struct MHBalancing <: BalancingFunction end
-struct BarkerBalancing <: BalancingFunction end
-struct SqrtBalancing <: BalancingFunction end
-
-struct FFF{B<:BalancingFunction,T,MS} <: AbstractMCMC.AbstractSampler
+struct FFF{B<:BalancingFunction,T,MS} <: RebalancedSampler{B}
     "leapfrog step size"
     ϵ::T
     "leapfrog step count"
@@ -16,12 +11,10 @@ struct FFF{B<:BalancingFunction,T,MS} <: AbstractMCMC.AbstractSampler
     Minv::MS
 end
 
-FFF{B}(ϵ::T, L, λfresh::T, ρfresh::T, Minv::MS) where {B,T,MS} = FFF{B,T,MS}(ϵ, L, λfresh, ρfresh, Minv)
+FFF{B}(ϵ::T, L, λfresh::T, ρfresh::T=zero(ϵ), Minv::MS=I) where {B,T,MS} = FFF{B,T,MS}(ϵ, L, λfresh, ρfresh, Minv)
 FFF(ϵ=0.1, L=1, λfresh=0.1, ρfresh=0.0, Minv=I) = FFF{MHBalancing}(float(ϵ), L, float(λfresh), float(ρfresh), Minv)
 
-@enum FFFAction FROG=1 FLIP FRESH MIRROR
-
-struct FFFState{T1,T2}
+struct FFFState{T1,T2,T3}
     "position"
     q::T1
     "momentum"
@@ -29,17 +22,17 @@ struct FFFState{T1,T2}
     "marginal log probability of position"
     ℓ_q::T2
     "marginal gradient log probability of position"
-    ∇ℓ_q::Vector{T2}
+    ∇ℓ_q::T3
 end
 
-abstract type AbstractFFFTransition{T1,T2} end
-struct FFFTransition{T1,T2} <: AbstractFFFTransition{T1,T2}
+abstract type AbstractFFFTransition{T1,T2,T3} end
+struct FFFTransition{T1,T2,T3} <: AbstractFFFTransition{T1,T2,T3}
     "current state"
-    current::FFFState{T1,T2}
+    current::FFFState{T1,T2,T3}
     "proposed forward state"
-    proposed::FFFState{T1,T2}
+    proposed::FFFState{T1,T2,T3}
     "last state (backward with flipped p)"
-    previous::FFFState{T1,T2}
+    previous::FFFState{T1,T2,T3}
     #"current balance"
     #λ::NTuple{4,T2}  # TODO reconsider?
     "current rates"
@@ -47,12 +40,11 @@ struct FFFTransition{T1,T2} <: AbstractFFFTransition{T1,T2}
     "number of leapfrog steps"
     n_steps::Int
     "action coming here"
-    action::FFFAction
+    action::Action
 end
 
 function refresh(rng::Random.AbstractRNG, model, sampler, p=nothing)
-    d = LogDensityProblems.dimension(model)
-    prop = randn(rng, d)
+    prop = _randn(rng, model)
     whiten!(prop, sampler.Minv, prop)  # we store the inverse, so it's whiten and not unwhiten
     if p === nothing
         return prop
@@ -73,24 +65,20 @@ function leapfrog(model, sampler, q, p, ℓ_q, ∇ℓ_q)
 end
 H(sampler, ℓ_q, p) = -ℓ_q + dot(p, sampler.Minv, p)/2
 
-balancing_g(::FFF{MHBalancing}, t) = min(t,one(t))
-balancing_g(::FFF{BarkerBalancing}, t) = t/(t+1)
-balancing_g(::FFF{SqrtBalancing}, t) = sqrt(t)
-
 ## Step functions
 
 # Initializer
 function AbstractMCMC.step(
     rng::Random.AbstractRNG,
     model_wrapper::AbstractMCMC.LogDensityModel,
-    sampler::FFF;
+    sampler::RebalancedSampler;
     initial_params=nothing,
     kwargs...
 )
     model = model_wrapper.logdensity
     q = if initial_params === nothing
         # Here we are just starting gaussian...
-        randn(rng, LogDensityProblems.dimension(model))
+        _randn(rng, model)
     else
         initial_params
     end
@@ -112,9 +100,9 @@ function AbstractMCMC.step(
     model = model_wrapper.logdensity
     # For the skeleton chain the actual times are not important.
     # We just need to draw who wins! So it could be done by a categorical method too.
-    τ🐸 = Random.randexp(rng)/transition.Λ[Int(FROG)]
-    τflip = Random.randexp(rng)/transition.Λ[Int(FLIP)]
-    τfresh = Random.randexp(rng)/transition.Λ[Int(FRESH)]
+    τ🐸 = Random.randexp(rng)/transition.Λ[FORWARD]
+    τflip = Random.randexp(rng)/transition.Λ[FLIP]
+    τfresh = Random.randexp(rng)/transition.Λ[FRESH]
 
     if τ🐸 < τflip && τ🐸 < τfresh
         transition_new = propose(model, sampler, transition.proposed, transition.current)
@@ -130,7 +118,7 @@ function AbstractMCMC.step(
 end
 
 # Actual proposal of next transition
-function propose(model, sampler::FFF, current::FFFState, previous::Union{FFFState,Nothing}=nothing; action::FFFAction=FROG)
+function propose(model, sampler::FFF, current::FFFState, previous::Union{FFFState,Nothing}=nothing; action::Action=FORWARD)
     q, p, ℓ_q, ∇ℓ_q = current.q, current.p, current.ℓ_q, current.∇ℓ_q
 
     # Do leapfrog forwards and backwards
@@ -168,6 +156,6 @@ function flip(transition::FFFTransition)
     current_new = FFFState(transition.current.q, -transition.current.p, transition.current.ℓ_q, transition.current.∇ℓ_q)
     proposed_new = FFFState(transition.previous.q, -transition.previous.p, transition.previous.ℓ_q, transition.previous.∇ℓ_q)
     previous_new = FFFState(transition.proposed.q, -transition.proposed.p, transition.proposed.ℓ_q, transition.proposed.∇ℓ_q)
-    Λ_new = (transition.Λ[Int(FROG)] + transition.Λ[Int(FLIP)], zero(transition.Λ[Int(FLIP)]), transition.Λ[Int(FRESH)])
+    Λ_new = (transition.Λ[FORWARD] + transition.Λ[FLIP], zero(transition.Λ[FLIP]), transition.Λ[FRESH])
     return FFFTransition(current_new, proposed_new, previous_new, Λ_new, 0, FLIP)
 end

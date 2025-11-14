@@ -1,6 +1,8 @@
 using GLMakie
 using GLMakie.Colors
 
+const palette = parse.(Ref(Colors.Colorant), ("#004d40", "#ffc107", "#1e8835", "#d81b60"))
+
 function stuck(raw)
     vs, fs = rle([r.stat.is_accept for r in raw])
     vs[1] ? median(fs[2:2:end]) :  median(fs[1:2:end])
@@ -13,19 +15,9 @@ function plot_trajectory(traj::AbstractVector{<:FFFSampler.AbstractFFFTransition
     xs = [t.current.q for t in traj]
 
     # figure out what each transition was
-    ttypes = map(1:(length(traj)-1)) do i # IterTools.partition(xs, 2, 1)
-        t0, t1 = traj[i], traj[i+1]
-        if t0.current.q != t1.current.q
-            :green
-        elseif t0.current.p == -t1.current.p
-            :orange
-        else
-            :darkblue
-        end
-    end
-    ttypes = [ttypes; :black]
-    ws2 = ws .* [t == :darkblue || t == :orange ? 4.0 : 1.0 for t in ttypes]
-    ttypes_doubled = collect(Iterators.flatten(zip(ttypes,ttypes)))[begin:end-1] # for stairs
+    ttypes = map(t -> palette[t.action], traj)
+    #ws2 = ws .* [t.action != FFFSampler.FORWARD ? 4.0 : 1.0 for t in ttypes]
+    ttypes_doubled = collect(Iterators.flatten(zip(ttypes,ttypes)))[begin+1:end] # for stairs
 
     fig = Figure(size=size)
     for i in 1:d, j in 1:d
@@ -37,7 +29,7 @@ function plot_trajectory(traj::AbstractVector{<:FFFSampler.AbstractFFFTransition
             ax, _ = lines(fig[i,j], xi, xj; color=:black, linewidth=0.1)
             ax.xlabel = "x$i"
             ax.ylabel = "x$j"
-            scatter!(ax, xi, xj; markersize=ws2, color=ttypes, alpha=0.5)
+            scatter!(ax, xi, xj; markersize=sqrt.(ws), color=ttypes, alpha=0.2)
         elseif i > j
             xi, xj = getindex.(xs, i), getindex.(xs, j)
             #ax, _ = scatter(fig[i,j], xj, xi; markersize=ws, color=:black, alpha=0.1)
@@ -58,16 +50,8 @@ function plot_trajectory(traj::AbstractVector{<:AdvancedHMC.Transition}; size=(8
     st = stuck(traj)
 
     # figure out what each transition was
-    ttypes = map(1:(length(traj)-1)) do i # IterTools.partition(xs, 2, 1)
-        t0, t1 = traj[i], traj[i+1]
-        if t0.z.θ != t1.z.θ
-            :green
-        else
-            :yellow
-        end
-    end
-    ttypes = [ttypes; :black]
-    ttypes_doubled = collect(Iterators.flatten(zip(ttypes,ttypes)))[begin:end-1] # for stairs
+    ttypes = map(t -> t.stat.is_accept ? palette[FFFSampler.FORWARD] : palette[FFFSampler.FLIP], traj)
+    ttypes_doubled = collect(Iterators.flatten(zip(ttypes,ttypes)))[begin+1:end] # for stairs
 
     fig = Figure(size=size)
     for i in 1:d, j in 1:d
@@ -77,12 +61,12 @@ function plot_trajectory(traj::AbstractVector{<:AdvancedHMC.Transition}; size=(8
         elseif i < j
             xi, xj = getindex.(xs, i), getindex.(xs, j)
             ax, _ = lines(fig[i,j], xi, xj; color=:black, linewidth=0.1)
-            scatter!(fig[i,j], xi, xj; color=:blue, alpha=0.1, markersize=2.0)
+            scatter!(fig[i,j], xi, xj; color=ttypes, alpha=0.2, markersize=1.0)
             ax.xlabel = "x$i"
             ax.ylabel = "x$j"
         elseif i > j
             xi, xj = getindex.(xs, i), getindex.(xs, j)
-            ax, _ = scatter(fig[i,j], xj, xi; markersize=2.0, axis=(;aspect = DataAspect()), color=:black, alpha=1/2st)
+            ax, _ = scatter(fig[i,j], xj, xi; markersize=2.0, axis=(;aspect = DataAspect()), color=:black)
             ax.xlabel = "x$j"
             ax.ylabel = "x$i"    
         end
